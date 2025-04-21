@@ -9,6 +9,7 @@ const express    = require('express');
 const http       = require('http');
 const multer     = require('multer');
 const { google } = require('googleapis');
+const { PassThrough } = require('stream');
 const { v4: uuidv4 } = require('uuid');
 const mongoose   = require('mongoose');
 const socketIO   = require('socket.io');
@@ -131,6 +132,10 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 
   try {
+    // wrap buffer in a stream so .pipe() is available
+    const bufferStream = new PassThrough();
+    bufferStream.end(req.file.buffer);
+
     // 1) Upload to Drive
     const driveRes = await drive.files.create({
       requestBody: {
@@ -139,7 +144,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       },
       media: {
         mimeType: req.file.mimetype,
-        body: Buffer.from(req.file.buffer)
+        body: bufferStream
       }
     });
     const fileId = driveRes.data.id;
@@ -159,7 +164,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     res.json({ fileUrl: meta.data.webContentLink });
   } catch (err) {
     console.error('Google Drive upload error:', err);
-    res.status(500).json({ error: 'Upload to Google Drive failed.' });
+    res.status(500).json({ error: err.message || 'Upload to Google Drive failed.' });
   }
 });
 
