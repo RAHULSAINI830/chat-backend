@@ -26,8 +26,6 @@ const {
   PORT = 5002,
   BASE_URL = `http://localhost:${PORT}`,
   CLIENT_URL = 'http://localhost:3000',
-  GOOGLE_CLIENT_EMAIL,
-  GOOGLE_PRIVATE_KEY,
   GOOGLE_DRIVE_FOLDER_ID
 } = process.env;
 
@@ -35,8 +33,8 @@ if (!MONGODB_URI) {
   console.error('Error: MONGODB_URI environment variable is required');
   process.exit(1);
 }
-if (!GOOGLE_CLIENT_EMAIL || !GOOGLE_PRIVATE_KEY || !GOOGLE_DRIVE_FOLDER_ID) {
-  console.error('Error: Google Drive env vars (GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, GOOGLE_DRIVE_FOLDER_ID) are required');
+if (!GOOGLE_DRIVE_FOLDER_ID) {
+  console.error('Error: GOOGLE_DRIVE_FOLDER_ID environment variable is required');
   process.exit(1);
 }
 
@@ -98,12 +96,11 @@ const User = mongoose.model('User', userSchema);
 // ---------------------------
 // Google Drive Client Setup
 // ---------------------------
-const auth = new google.auth.JWT(
-  GOOGLE_CLIENT_EMAIL,
-  null,
-  GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-  ['https://www.googleapis.com/auth/drive']
-);
+// load the raw JSON you downloaded
+const serviceAccount = require('./service-account.json');
+// let googleapis parse it (handles key formatting correctly)
+const auth = google.auth.fromJSON(serviceAccount);
+auth.scopes = ['https://www.googleapis.com/auth/drive'];
 const drive = google.drive({ version: 'v3', auth });
 
 // ---------------------------
@@ -111,7 +108,7 @@ const drive = google.drive({ version: 'v3', auth });
 // ---------------------------
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 }, // 100 KB
+  limits: { fileSize: 100 * 1024 }, // 100 KB
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('audio/')) {
       cb(null, true);
@@ -132,7 +129,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 
   try {
-    // wrap buffer in a stream so .pipe() is available
+    // Wrap buffer in a stream so .pipe() is available
     const bufferStream = new PassThrough();
     bufferStream.end(req.file.buffer);
 
